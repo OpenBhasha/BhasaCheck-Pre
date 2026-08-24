@@ -1,6 +1,13 @@
 import os
 from dataclasses import dataclass, field
 
+from dotenv import load_dotenv
+
+# Loads ml-service/.env into the process environment. Must run before the
+# os.environ.get(...) defaults below are evaluated, since those are
+# dataclass field defaults computed once at class-definition time.
+load_dotenv()
+
 
 @dataclass(frozen=True)
 class Settings:

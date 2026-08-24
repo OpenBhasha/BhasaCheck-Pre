@@ -1,20 +1,38 @@
+# Pinned explicitly so pip resolves a prebuilt wheel instead of falling back
+# to compiling an old numpy from source (needs BLAS/LAPACK/gfortran). numpy
+# 2.x is required by pyannote.audio 4.x/torch 2.8 below and has been verified
+# working here with demucs/whisper/silero-vad too.
+numpy>=2,<3
+
 # Core service
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 requests==2.32.3
 python-multipart==0.0.9
+python-dotenv>=1.0.1        # loads ml-service/.env — see app/config.py
 
 # Cloudinary (audio storage)
 cloudinary==1.41.0
 
 # ML — see README.md "Model Licenses" for the verified license of each
-torch==2.4.1
-torchaudio==2.4.1
+torch==2.8.0
+torchaudio==2.8.0
 demucs==4.0.1              # MIT
 silero-vad==5.1.2          # MIT (also loadable via torch.hub, kept as a pinned fallback)
-pyannote.audio==3.3.1      # MIT toolkit; pretrained pipeline has its own model-card terms
-openai-whisper==20231117   # MIT (code + weights)
+pyannote.audio==4.0.7      # MIT toolkit; pretrained pipeline has its own model-card terms.
+                            # Pinned to 4.x (not 3.x): the default pipeline,
+                            # pyannote/speaker-diarization-community-1, uses PLDA-based
+                            # clustering that pyannote.audio 3.x's SpeakerDiarization class
+                            # doesn't support (`unexpected keyword argument 'plda'`). 4.x also
+                            # requires torch>=2.8.0, which is why torch/torchaudio above moved
+                            # off 2.4.1 too.
+huggingface-hub<1.0        # pyannote.audio only requires >=0.28.1 with no upper bound, so pip
+                            # resolves the latest (1.x) otherwise, which removed the
+                            # use_auth_token alias pyannote's own hf_hub_download() calls use
+openai-whisper==20250625   # MIT (code + weights) — pinned past 20231117: that release
+                            # requires triton<3, which conflicts with torch's own triton>=3
+                            # requirement (both 2.4.1 and 2.8.0)
 
 # See requirements-nemo.txt for IndicConformer / NVIDIA NeMo — optional,
 # heavy (CUDA-oriented) dependencies not required unless those providers
