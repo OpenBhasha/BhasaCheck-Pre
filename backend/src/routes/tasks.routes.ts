@@ -19,5 +19,6 @@ router.get('/', tasksController.listTasks);
 router.get('/:id', tasksController.getTask);
 router.patch('/:id/assign', validate(assignTaskSchema), tasksController.assignTask);
 router.get('/:id/annotations', tasksController.listTaskAnnotations);
+router.delete('/:id', tasksController.deleteTask);
 
 export default router;

@@ -32,3 +32,18 @@ export async function enqueueAudioProcessing(data: AudioProcessingJobData) {
     removeOnFail: { age: 30 * 24 * 3600 },
   });
 }
+
+/**
+ * Best-effort removal of a queued/failed job for a deleted dataset (e.g. a
+ * Task being deleted). Does nothing if the job is already active/completed
+ * or no longer exists — this is cleanup, not a hard requirement.
+ */
+export async function removeAudioProcessingJob(datasetId: string): Promise<void> {
+  try {
+    const job = await getQueue().getJob(datasetId);
+    await job?.remove();
+  } catch {
+    // e.g. the job is currently active/locked by a worker — nothing more to
+    // do here; the worker will simply find the Dataset gone when it finishes.
+  }
+}

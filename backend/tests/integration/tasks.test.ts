@@ -10,13 +10,17 @@ jest.mock('../../src/services/cloudinary.service', () => ({
 
 jest.mock('../../src/queues/audioProcessing.queue', () => ({
   enqueueAudioProcessing: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  removeAudioProcessingJob: jest.fn().mockResolvedValue(undefined),
 }));
 
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { authHeader, createUser } from '../helpers';
 import { Dataset } from '../../src/models/Dataset';
-import { enqueueAudioProcessing } from '../../src/queues/audioProcessing.queue';
+import { Task } from '../../src/models/Task';
+import { Annotation } from '../../src/models/Annotation';
+import { enqueueAudioProcessing, removeAudioProcessingJob } from '../../src/queues/audioProcessing.queue';
+import { deleteAudio } from '../../src/services/cloudinary.service';
 
 const app = createApp();
 
@@ -72,5 +76,59 @@ describe('Task audio upload', () => {
 
     const res = await request(app).post(`/api/tasks?projectId=${projectId}`).set(authHeader(admin));
     expect(res.status).toBe(400);
+  });
+});
+
+describe('Task deletion', () => {
+  it('deletes the task, its dataset, its annotations, its Cloudinary audio, and its queue job', async () => {
+    const admin = await createUser({ email: 'delAdmin@example.com', role: 'admin' });
+    const projectId = await createProjectAsAdmin(admin);
+
+    const uploadRes = await request(app)
+      .post(`/api/tasks?projectId=${projectId}`)
+      .set(authHeader(admin))
+      .attach('audio', Buffer.from('fake-audio-bytes'), 'sample.mp3');
+    const taskId = uploadRes.body.task._id as string;
+    const datasetId = uploadRes.body.dataset._id as string;
+
+    await Annotation.create({ task: taskId, user: admin._id, type: 'annotation', rsmlText: 'hi' });
+
+    const res = await request(app).delete(`/api/tasks/${taskId}`).set(authHeader(admin));
+    expect(res.status).toBe(204);
+
+    expect(await Task.findById(taskId)).toBeNull();
+    expect(await Dataset.findById(datasetId)).toBeNull();
+    expect(await Annotation.find({ task: taskId })).toHaveLength(0);
+    expect(deleteAudio).toHaveBeenCalledWith('rsml/audio/fake');
+    expect(removeAudioProcessingJob).toHaveBeenCalledWith(datasetId);
+  });
+
+  it('rejects deletion from a non-admin project member', async () => {
+    const admin = await createUser({ email: 'delAdmin2@example.com', role: 'admin' });
+    const annotator = await createUser({ email: 'delAnn@example.com', role: 'annotator' });
+    const projectId = await createProjectAsAdmin(admin);
+    await request(app)
+      .post(`/api/projects/${projectId}/members`)
+      .set(authHeader(admin))
+      .send({ userId: annotator._id.toString(), projectRole: 'annotator' });
+
+    const uploadRes = await request(app)
+      .post(`/api/tasks?projectId=${projectId}`)
+      .set(authHeader(admin))
+      .attach('audio', Buffer.from('fake-audio-bytes'), 'sample.mp3');
+
+    const res = await request(app)
+      .delete(`/api/tasks/${uploadRes.body.task._id}`)
+      .set(authHeader(annotator));
+    expect(res.status).toBe(403);
+    expect(await Task.findById(uploadRes.body.task._id)).not.toBeNull();
+  });
+
+  it('404s for a non-existent task', async () => {
+    const admin = await createUser({ email: 'delAdmin3@example.com', role: 'admin' });
+    const res = await request(app)
+      .delete('/api/tasks/507f1f77bcf86cd799439011')
+      .set(authHeader(admin));
+    expect(res.status).toBe(404);
   });
 });

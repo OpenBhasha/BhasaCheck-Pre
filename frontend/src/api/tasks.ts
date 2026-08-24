@@ -36,3 +36,8 @@ export function assignTask(
 export function listTaskAnnotations(id: string) {
   return api.get<{ annotations: Annotation[] }>(`/tasks/${id}/annotations`).then((r) => r.data.annotations);
 }
+
+/** Deletes the task along with its Cloudinary audio, Dataset, and Annotations. */
+export function deleteTask(id: string) {
+  return api.delete(`/tasks/${id}`);
+}

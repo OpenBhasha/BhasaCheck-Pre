@@ -9,7 +9,7 @@ import {
   removeMember,
   updateMemberRole,
 } from '../api/projects';
-import { assignTask, uploadTaskAudio } from '../api/tasks';
+import { assignTask, deleteTask, uploadTaskAudio } from '../api/tasks';
 import { listUsers } from '../api/users';
 import { apiErrorMessage } from '../api/client';
 import type { Project, ProjectMember, ProjectRole, Task, User } from '../types';

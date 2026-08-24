@@ -7,7 +7,8 @@ import { assertProjectAccess } from '../middleware/authorize';
 import { ApiError } from '../utils/ApiError';
 import { asyncHandler } from '../utils/asyncHandler';
 import { processAndUploadAudio } from '../services/audio/audioUpload.service';
-import { enqueueAudioProcessing } from '../queues/audioProcessing.queue';
+import { enqueueAudioProcessing, removeAudioProcessingJob } from '../queues/audioProcessing.queue';
+import { deleteAudio } from '../services/cloudinary.service';
 import { logger } from '../config/logger';
 
 export const uploadAudioTask = asyncHandler(async (req: Request, res: Response) => {
@@ -109,6 +110,36 @@ export const assignTask = asyncHandler(async (req: Request, res: Response) => {
 
   await task.save();
   res.json({ task });
+});
+
+export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
+  const task = await Task.findById(req.params.id);
+  if (!task) throw ApiError.notFound('Task not found');
+  await assertProjectAccess(req.user!, task.project, ['admin']);
+
+  const dataset = task.dataset ? await Dataset.findById(task.dataset) : null;
+
+  if (dataset) {
+    await removeAudioProcessingJob(dataset._id.toString());
+
+    const audioDeletes = [deleteAudio(dataset.originalAudio.publicId)];
+    if (dataset.processedAudio) {
+      audioDeletes.push(deleteAudio(dataset.processedAudio.publicId));
+    }
+    const results = await Promise.allSettled(audioDeletes);
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        logger.warn(`Failed to delete Cloudinary audio for dataset ${dataset._id.toString()} (asset ${i})`, result.reason);
+      }
+    });
+  }
+
+  await Annotation.deleteMany({ task: task._id });
+  if (dataset) await dataset.deleteOne();
+  await task.deleteOne();
+
+  logger.info(`Task ${task._id.toString()} and its audio/dataset/annotations deleted`);
+  res.status(204).send();
 });
 
 export const listTaskAnnotations = asyncHandler(async (req: Request, res: Response) => {
