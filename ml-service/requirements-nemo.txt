@@ -1,0 +1,10 @@
+# Optional. Only needed if IndicConformerProvider or NeMoProvider are
+# actually used (INDIC_CONFORMER_MODEL_PATH / NEMO_MODEL_PATH set). Large
+# install with many native/CUDA dependencies — install into the ml-service
+# environment with:
+#
+#   pip install -r requirements.txt -r requirements-nemo.txt
+#
+# Verify NeMo's and any specific checkpoint's license before production use
+# (see README.md "Model Licenses").
+nemo_toolkit[asr]==2.0.0

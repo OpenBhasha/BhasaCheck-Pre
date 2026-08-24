@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ML working files
+ml-service/app/**/*.pt
+ml-service/app/**/*.nemo

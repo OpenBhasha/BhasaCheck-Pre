@@ -1,0 +1,59 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  ml-service:
+    build: ./ml-service
+    restart: unless-stopped
+    env_file: ./ml-service/.env
+    ports:
+      - "8000:8000"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/rsml
+      REDIS_URL: redis://redis:6379
+      ML_SERVICE_URL: http://ml-service:8000
+      INTERNAL_CALLBACK_URL: http://backend:5000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+      - redis
+      - ml-service
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["node", "dist/workers/audioProcessing.worker.js"]
+    env_file: ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/rsml
+      REDIS_URL: redis://redis:6379
+      ML_SERVICE_URL: http://ml-service:8000
+      INTERNAL_CALLBACK_URL: http://backend:5000
+    depends_on:
+      - mongo
+      - redis
+      - ml-service
+      - backend
+
+volumes:
+  mongo_data:
+  redis_data:

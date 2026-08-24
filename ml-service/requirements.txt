@@ -1,0 +1,21 @@
+# Core service
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+requests==2.32.3
+python-multipart==0.0.9
+
+# Cloudinary (audio storage)
+cloudinary==1.41.0
+
+# ML — see README.md "Model Licenses" for the verified license of each
+torch==2.4.1
+torchaudio==2.4.1
+demucs==4.0.1              # MIT
+silero-vad==5.1.2          # MIT (also loadable via torch.hub, kept as a pinned fallback)
+pyannote.audio==3.3.1      # MIT toolkit; pretrained pipeline has its own model-card terms
+openai-whisper==20231117   # MIT (code + weights)
+
+# See requirements-nemo.txt for IndicConformer / NVIDIA NeMo — optional,
+# heavy (CUDA-oriented) dependencies not required unless those providers
+# are actually used.
