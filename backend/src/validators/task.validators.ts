@@ -4,6 +4,7 @@ export const uploadAudioTaskSchema = z.object({
   body: z.object({
     language: z.string().max(50).optional(),
     speakerLabel: z.string().max(200).optional(),
+    storageProvider: z.enum(['cloudinary', 'local']).optional(),
   }),
   query: z.object({
     projectId: z.string().min(1),

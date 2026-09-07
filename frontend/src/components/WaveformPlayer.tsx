@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 
-export function WaveformPlayer({ audioUrl }: { audioUrl: string }) {
+export interface WaveformPlayerHandle {
+  /** Seeks to the given time (seconds) and starts playback from there. */
+  seekTo: (seconds: number) => void;
+}
+
+export const WaveformPlayer = forwardRef<WaveformPlayerHandle, { audioUrl: string }>(function WaveformPlayer(
+  { audioUrl },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const waveRef = useRef<WaveSurfer | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -31,6 +39,15 @@ export function WaveformPlayer({ audioUrl }: { audioUrl: string }) {
     };
   }, [audioUrl]);
 
+  useImperativeHandle(ref, () => ({
+    seekTo: (seconds: number) => {
+      const wavesurfer = waveRef.current;
+      if (!wavesurfer) return;
+      wavesurfer.setTime(seconds);
+      void wavesurfer.play();
+    },
+  }));
+
   return (
     <div className="waveform-box">
       <div ref={containerRef} />
@@ -44,4 +61,4 @@ export function WaveformPlayer({ audioUrl }: { audioUrl: string }) {
       </div>
     </div>
   );
-}
+});

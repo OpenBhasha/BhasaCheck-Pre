@@ -37,6 +37,7 @@ describe('Task audio upload', () => {
     const res = await request(app)
       .post(`/api/tasks?projectId=${projectId}`)
       .set(authHeader(admin))
+      .field('storageProvider', 'cloudinary')
       .attach('audio', Buffer.from('fake-audio-bytes'), 'sample.mp3');
 
     expect(res.status).toBe(201);
@@ -87,6 +88,7 @@ describe('Task deletion', () => {
     const uploadRes = await request(app)
       .post(`/api/tasks?projectId=${projectId}`)
       .set(authHeader(admin))
+      .field('storageProvider', 'cloudinary')
       .attach('audio', Buffer.from('fake-audio-bytes'), 'sample.mp3');
     const taskId = uploadRes.body.task._id as string;
     const datasetId = uploadRes.body.dataset._id as string;

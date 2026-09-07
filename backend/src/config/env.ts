@@ -36,4 +36,16 @@ export const env = {
   allowedAudioFormats: (process.env.ALLOWED_AUDIO_FORMATS ?? 'wav,mp3,m4a,flac,ogg').split(','),
 
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
+
+  // Local disk storage — the alternative to Cloudinary, chosen per upload.
+  localStorageRoot: process.env.LOCAL_STORAGE_ROOT ?? './storage/audio',
+  // Base URL this server is externally reachable at, used to build absolute
+  // URLs for locally-stored files (the frontend, and the ML service, both
+  // need a real URL — not a bare path — same as a Cloudinary URL would be).
+  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 5000}`,
+  // Used when a client doesn't specify ?storageProvider on upload. Defaults
+  // to local if Cloudinary isn't configured at all, so the app works out of
+  // the box with zero external setup.
+  defaultAudioStorageProvider: (process.env.DEFAULT_AUDIO_STORAGE_PROVIDER as 'cloudinary' | 'local' | undefined)
+    ?? (process.env.CLOUDINARY_CLOUD_NAME ? 'cloudinary' : 'local'),
 };

@@ -4,6 +4,24 @@ A MERN annotator/reviewer platform (Shoonya-style) for RSML-tagged speech transc
 Python ML preprocessing pipeline that auto-drafts a transcript for a freshly uploaded audio file before a
 human Annotator takes over.
 
+**New here?** [MANAGE.md](MANAGE.md) is the condensed, task-oriented guide — full local setup plus a
+step-by-step admin walkthrough of every feature. This README is the detailed architecture/per-service
+reference; [API_TESTING.md](API_TESTING.md) is the raw-HTTP/Postman version.
+
+**Quick start** — once each service's one-time setup below is done (§2 backend deps, §5 Cloudinary or
+local storage, §6 ML service `.venv`, §13 frontend deps), start everything with one command:
+
+```bash
+./scripts/dev-up.sh          # Redis, ML service, backend API, worker, frontend
+./scripts/dev-up.sh --logs   # same, then tail every service's log together
+./scripts/dev-down.sh        # stop everything it started
+```
+
+It only starts what isn't already running (checked by port and by process, so re-running it — or having
+some services already up in other terminals — is safe, nothing gets duplicated) and never touches a
+service it didn't start itself. Logs land in `.dev-logs/`, PIDs in `.dev-pids/` (both gitignored). See §9
+for the manual per-terminal version and what to actually do once it's up.
+
 ## 1. Architecture
 
 ```
@@ -75,14 +93,29 @@ point `MONGODB_URI` at it. `docker-compose.yml` runs one for you.
 Local Redis (`redis://localhost:6379`) or the `redis` service in `docker-compose.yml`. Used only for
 BullMQ job queuing — MongoDB remains the source of truth for all persisted application data.
 
-## 5. Cloudinary setup
+## 5. Cloudinary setup (and the local-disk alternative)
 
-Create a free Cloudinary account, then set `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` /
-`CLOUDINARY_API_SECRET` **in both `backend/.env` and `ml-service/.env`** — Node uploads the original
-audio, the ML service downloads it and uploads the processed track back, so both need the same account.
-Audio is uploaded under Cloudinary's `video` resource type (Cloudinary has no distinct "audio" resource
-type — `video` is what accepts and streams audio files). Never commit real credentials; `.env` is
-gitignored in both directories.
+Audio storage is pluggable (`backend/src/services/storage/` — `CloudinaryStorageProvider` /
+`LocalStorageProvider`, chosen per upload, not a fixed global setting):
+
+- **Cloudinary**: create a free account, then set `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` /
+  `CLOUDINARY_API_SECRET` **in both `backend/.env` and `ml-service/.env`** — Node uploads the original
+  audio, the ML service downloads it and uploads the processed track back, so both need the same
+  account. Audio is uploaded under Cloudinary's `video` resource type (Cloudinary has no distinct
+  "audio" resource type — `video` is what accepts and streams audio files).
+- **Local disk**: no external account needed. Files land under `LOCAL_STORAGE_ROOT`
+  (`backend/.env`, default `./storage/audio`) and are served back out at
+  `<PUBLIC_BASE_URL>/uploads/<path>` via the `/uploads` static route in `app.ts` — the same
+  "public but unguessable path" security model a Cloudinary URL already has, not authenticated.
+  `PUBLIC_BASE_URL` must be the address the browser (and, if using docker-compose, the ml-service
+  container) actually reaches this server at; see the comment on it in `docker-compose.yml` for why
+  local storage doesn't cleanly cross container boundaries there.
+
+A client picks per upload via the `storageProvider` field (`"cloudinary" | "local"`) on
+`POST /api/tasks`; omitting it uses `DEFAULT_AUDIO_STORAGE_PROVIDER`, which itself defaults to
+`cloudinary` if `CLOUDINARY_CLOUD_NAME` is set, else `local` — so the app works with zero external
+setup out of the box. Never commit real Cloudinary credentials; `.env` is gitignored in both
+directories, and so is `backend/storage/` (the local-disk default).
 
 ## 6. ML service setup (Python)
 
@@ -187,9 +220,12 @@ All routes require `Authorization: Bearer <accessToken>` unless noted, and (beyo
   `PATCH /api/users/:id/deactivate|reactivate|role` — Admin/Super Admin
 - `POST/GET /api/projects`, `GET/PATCH/DELETE /api/projects/:id`,
   `POST/PATCH/DELETE /api/projects/:id/members[/:userId]`, `GET /api/projects/:id/tasks|export`
-- `POST /api/tasks?projectId=` (multipart `audio` — single-file upload, creates Task + Dataset + enqueues
-  the ML job), `GET /api/tasks`, `GET /api/tasks/:id`, `PATCH /api/tasks/:id/assign`,
-  `GET /api/tasks/:id/annotations`
+- `POST /api/tasks?projectId=` (multipart `audio` + optional `storageProvider: "cloudinary"|"local"` —
+  single-file upload, creates Task + Dataset + enqueues the ML job), `GET /api/tasks`,
+  `GET /api/tasks/:id`, `PATCH /api/tasks/:id/assign`, `GET /api/tasks/:id/annotations`,
+  `GET /api/tasks/:id/export/srt` (downloads the ML transcript as a subtitle file — speaker,
+  overlap, language, model, and confidence per cue, wherever the pipeline produced them),
+  `DELETE /api/tasks/:id` (also removes its audio, Dataset, and Annotations)
 - `POST/GET/PATCH /api/annotations[/:id]`, `POST /api/annotations/:id/submit|review`
 - `POST /api/internal/datasets/:datasetId/stage` — **internal only**, called by the Python ML service,
   guarded by the `X-Internal-Secret` header (shared `INTERNAL_SERVICE_SECRET`), never called by a browser

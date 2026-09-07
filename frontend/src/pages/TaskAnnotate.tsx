@@ -1,25 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getTask } from '../api/tasks';
+import { downloadTaskSrt, getTask } from '../api/tasks';
 import { createAnnotation, submitAnnotation, updateAnnotation } from '../api/annotations';
 import { apiErrorMessage } from '../api/client';
+import { downloadBlob } from '../lib/downloadBlob';
 import type { Annotation, Dataset, Task } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
-import { WaveformPlayer } from '../components/WaveformPlayer';
+import { WaveformPlayer, type WaveformPlayerHandle } from '../components/WaveformPlayer';
 import { ProcessingStatusPanel } from '../components/ProcessingStatusPanel';
 import { TranscriptReference } from '../components/TranscriptReference';
+import { RsmlEditor, type RsmlEditorHandle } from '../components/RsmlEditor';
 
 export function TaskAnnotate() {
   const { id } = useParams<{ id: string }>();
   const [task, setTask] = useState<Task | null>(null);
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [annotation, setAnnotation] = useState<Annotation | null>(null);
-  const [rsmlText, setRsmlText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const editorRef = useRef<RsmlEditorHandle>(null);
+  const waveformRef = useRef<WaveformPlayerHandle>(null);
 
   const loadTask = useCallback(async () => {
     if (!id) return null;
@@ -34,7 +37,6 @@ export function TaskAnnotate() {
     try {
       const draft = await createAnnotation({ taskId: id, type: 'annotation' });
       setAnnotation(draft);
-      setRsmlText(draft.rsmlText);
     } catch (err) {
       // 409 = preprocessing not done yet, surfaced via the processing panel instead
       setError(apiErrorMessage(err, 'Could not open annotation draft'));
@@ -70,11 +72,23 @@ export function TaskAnnotate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.processing.status]);
 
+  async function handleDownloadSrt() {
+    if (!id) return;
+    setError(null);
+    try {
+      const blob = await downloadTaskSrt(id);
+      downloadBlob(blob, `task-${id}.srt`);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not download SRT'));
+    }
+  }
+
   async function handleSave() {
     if (!annotation) return;
     setSaving(true);
     setError(null);
     try {
+      const rsmlText = editorRef.current?.getValue() ?? '';
       const updated = await updateAnnotation(annotation._id, rsmlText);
       setAnnotation(updated);
     } catch (err) {
@@ -118,14 +132,24 @@ export function TaskAnnotate() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      <WaveformPlayer audioUrl={task.audioUrl} />
+      <WaveformPlayer ref={waveformRef} audioUrl={task.audioUrl} />
 
       {dataset && dataset.processing.status !== 'completed' && (
         <ProcessingStatusPanel dataset={dataset} />
       )}
 
       {dataset?.processing.status === 'completed' && dataset.transcriptSegments.length > 0 && (
-        <TranscriptReference segments={dataset.transcriptSegments} />
+        <>
+          <TranscriptReference
+            segments={dataset.transcriptSegments}
+            onSeek={(t) => waveformRef.current?.seekTo(t)}
+          />
+          <div className="btn-row" style={{ margin: '-10px 0 16px' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadSrt}>
+              Download SRT
+            </button>
+          </div>
+        </>
       )}
 
       {annotation && (
@@ -134,11 +158,11 @@ export function TaskAnnotate() {
             <h3 style={{ margin: 0 }}>RSML text</h3>
             <StatusBadge status={annotation.status} />
           </div>
-          <textarea
-            style={{ minHeight: 220 }}
-            value={rsmlText}
-            onChange={(e) => setRsmlText(e.target.value)}
-            disabled={!isDraftEditable}
+          <RsmlEditor
+            ref={editorRef}
+            key={`${annotation._id}-${annotation.status}`}
+            initialValue={annotation.rsmlText}
+            editable={isDraftEditable}
           />
           {isDraftEditable ? (
             <div className="btn-row" style={{ marginTop: 12 }}>

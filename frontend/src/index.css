@@ -443,7 +443,99 @@ tr:last-child td {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+button.ts-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+button.ts-link:hover {
+  text-decoration: underline;
+}
 .transcript-line .speaker {
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* ===== RSML tag editor (rsml npm package) ===== */
+.rsml-editor {
+  align-items: start;
+}
+
+.rsml-editor textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.rsml-output {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  padding: 14px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+/* Preview-only mode (review screen): the editing surface must stay in the
+   DOM for the widget to mount, but is fully hidden and unfocusable — only
+   the rendered chip preview is shown, at full width. */
+.rsml-editor-preview-only {
+  display: block;
+}
+.rsml-editor-hidden-source {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The widget injects a Bootstrap-style "Normalized/Verbatim" toggle switch
+   into the output pane; style it to match our theme without pulling in
+   Bootstrap itself. */
+.rsml-output .form-check.form-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 0;
+}
+.rsml-output .form-check-input {
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.rsml-output .form-check-input::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease;
+}
+.rsml-output .form-check-input:checked {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+}
+.rsml-output .form-check-input:checked::before {
+  transform: translateX(14px);
+}
+.rsml-output .form-check-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin: 0;
 }

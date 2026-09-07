@@ -15,6 +15,8 @@ export type AnnotationType = 'annotation' | 'review';
 export type AnnotationStatus = 'draft' | 'submitted' | 'accepted' | 'rejected' | 'to_correct';
 export type ReviewDecision = 'accept' | 'reject' | 'to_correct';
 
+export type AudioStorageProvider = 'cloudinary' | 'local';
+
 export type ProcessingStatus =
   | 'pending'
   | 'processing'
@@ -69,8 +71,8 @@ export interface Dataset {
   _id: string;
   task: string;
   project: string;
-  originalAudio: { url: string; publicId: string; durationSec?: number | null };
-  processedAudio: { url: string; publicId: string } | null;
+  originalAudio: { url: string; publicId: string; provider?: AudioStorageProvider; durationSec?: number | null };
+  processedAudio: { url: string; publicId: string; provider?: AudioStorageProvider } | null;
   processing: {
     status: ProcessingStatus;
     progress: number;

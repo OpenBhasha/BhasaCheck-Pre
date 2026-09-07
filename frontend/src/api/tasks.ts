@@ -1,15 +1,16 @@
 import { api } from './client';
-import type { Annotation, Dataset, Task } from '../types';
+import type { Annotation, AudioStorageProvider, Dataset, Task } from '../types';
 
 export function uploadTaskAudio(
   projectId: string,
   file: File,
-  fields: { language?: string; speakerLabel?: string }
+  fields: { language?: string; speakerLabel?: string; storageProvider?: AudioStorageProvider }
 ) {
   const formData = new FormData();
   formData.append('audio', file);
   if (fields.language) formData.append('language', fields.language);
   if (fields.speakerLabel) formData.append('speakerLabel', fields.speakerLabel);
+  if (fields.storageProvider) formData.append('storageProvider', fields.storageProvider);
 
   return api
     .post<{ task: Task; dataset: Dataset }>(`/tasks?projectId=${projectId}`, formData, {
@@ -40,4 +41,10 @@ export function listTaskAnnotations(id: string) {
 /** Deletes the task along with its Cloudinary audio, Dataset, and Annotations. */
 export function deleteTask(id: string) {
   return api.delete(`/tasks/${id}`);
+}
+
+/** Downloads the ML-generated transcript as an SRT file (speaker/language/model/confidence per cue). */
+export async function downloadTaskSrt(id: string): Promise<Blob> {
+  const res = await api.get(`/tasks/${id}/export/srt`, { responseType: 'blob' });
+  return res.data as Blob;
 }

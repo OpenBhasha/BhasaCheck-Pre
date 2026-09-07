@@ -31,8 +31,17 @@ services:
       REDIS_URL: redis://redis:6379
       ML_SERVICE_URL: http://ml-service:8000
       INTERNAL_CALLBACK_URL: http://backend:5000
+      # NOT overridden to http://backend:5000 like the others above: this
+      # one is used to build URLs for the *browser* (and, via docker-compose,
+      # the ml-service container downloading a locally-stored original) — it
+      # needs to stay whatever host:port the frontend itself already reaches
+      # this service at. Local storage under docker-compose only works if
+      # that's a hostname every consumer (host browser, ml-service container)
+      # can resolve; if not, use Cloudinary storage when running via compose.
     ports:
       - "5000:5000"
+    volumes:
+      - audio_storage:/srv/storage
     depends_on:
       - mongo
       - redis
@@ -48,6 +57,8 @@ services:
       REDIS_URL: redis://redis:6379
       ML_SERVICE_URL: http://ml-service:8000
       INTERNAL_CALLBACK_URL: http://backend:5000
+    volumes:
+      - audio_storage:/srv/storage
     depends_on:
       - mongo
       - redis
@@ -57,3 +68,4 @@ services:
 volumes:
   mongo_data:
   redis_data:
+  audio_storage:

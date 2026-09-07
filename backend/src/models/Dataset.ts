@@ -1,7 +1,11 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { ProcessingStatus } from '../types';
+import { AudioStorageProvider, ProcessingStatus } from '../types';
 
 export interface IAudioRef {
+  /** Where the bytes actually live. Absent on documents created before this
+   * field existed — treat a missing value as 'cloudinary', which was the
+   * only option at the time. */
+  provider?: AudioStorageProvider;
   url: string;
   publicId: string;
   format?: string;
@@ -12,6 +16,7 @@ export interface IAudioRef {
 }
 
 export interface IProcessedAudioRef {
+  provider?: AudioStorageProvider;
   url: string;
   publicId: string;
 }
@@ -72,6 +77,7 @@ export interface IDataset extends Document {
 
 const audioRefSchema = new Schema<IAudioRef>(
   {
+    provider: { type: String, enum: ['cloudinary', 'local'] },
     url: { type: String, required: true },
     publicId: { type: String, required: true },
     format: { type: String },
@@ -85,6 +91,7 @@ const audioRefSchema = new Schema<IAudioRef>(
 
 const processedAudioRefSchema = new Schema<IProcessedAudioRef>(
   {
+    provider: { type: String, enum: ['cloudinary', 'local'] },
     url: { type: String, required: true },
     publicId: { type: String, required: true },
   },

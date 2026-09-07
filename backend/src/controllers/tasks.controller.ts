@@ -8,8 +8,13 @@ import { ApiError } from '../utils/ApiError';
 import { asyncHandler } from '../utils/asyncHandler';
 import { processAndUploadAudio } from '../services/audio/audioUpload.service';
 import { enqueueAudioProcessing, removeAudioProcessingJob } from '../queues/audioProcessing.queue';
-import { deleteAudio } from '../services/cloudinary.service';
+import { getAudioStorageProvider } from '../services/storage';
+import { generateSrt } from '../services/srtExport.service';
 import { logger } from '../config/logger';
+import { env } from '../config/env';
+import { AudioStorageProvider } from '../types';
+
+const VALID_STORAGE_PROVIDERS: AudioStorageProvider[] = ['cloudinary', 'local'];
 
 export const uploadAudioTask = asyncHandler(async (req: Request, res: Response) => {
   const projectId = req.query.projectId as string;
@@ -19,7 +24,13 @@ export const uploadAudioTask = asyncHandler(async (req: Request, res: Response) 
   const file = req.file;
   if (!file) throw ApiError.badRequest('Missing audio file (field name "audio")');
 
-  const { audioRef } = await processAndUploadAudio(file, projectId);
+  const requestedProvider = req.body.storageProvider as string | undefined;
+  if (requestedProvider && !VALID_STORAGE_PROVIDERS.includes(requestedProvider as AudioStorageProvider)) {
+    throw ApiError.badRequest(`storageProvider must be one of: ${VALID_STORAGE_PROVIDERS.join(', ')}`);
+  }
+  const storageProvider = (requestedProvider as AudioStorageProvider) || env.defaultAudioStorageProvider;
+
+  const { audioRef } = await processAndUploadAudio(file, projectId, storageProvider);
   const { language, speakerLabel } = req.body;
 
   const task = await Task.create({
@@ -122,14 +133,18 @@ export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
   if (dataset) {
     await removeAudioProcessingJob(dataset._id.toString());
 
-    const audioDeletes = [deleteAudio(dataset.originalAudio.publicId)];
+    const audioDeletes = [
+      getAudioStorageProvider(dataset.originalAudio.provider ?? 'cloudinary').delete(dataset.originalAudio),
+    ];
     if (dataset.processedAudio) {
-      audioDeletes.push(deleteAudio(dataset.processedAudio.publicId));
+      audioDeletes.push(
+        getAudioStorageProvider(dataset.processedAudio.provider ?? 'cloudinary').delete(dataset.processedAudio)
+      );
     }
     const results = await Promise.allSettled(audioDeletes);
     results.forEach((result, i) => {
       if (result.status === 'rejected') {
-        logger.warn(`Failed to delete Cloudinary audio for dataset ${dataset._id.toString()} (asset ${i})`, result.reason);
+        logger.warn(`Failed to delete stored audio for dataset ${dataset._id.toString()} (asset ${i})`, result.reason);
       }
     });
   }
@@ -140,6 +155,25 @@ export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
 
   logger.info(`Task ${task._id.toString()} and its audio/dataset/annotations deleted`);
   res.status(204).send();
+});
+
+export const exportTaskSrt = asyncHandler(async (req: Request, res: Response) => {
+  const task = await Task.findById(req.params.id);
+  if (!task) throw ApiError.notFound('Task not found');
+  await assertProjectAccess(req.user!, task.project);
+
+  const dataset = task.dataset ? await Dataset.findById(task.dataset) : null;
+  if (!dataset || dataset.processing.status !== 'completed') {
+    throw ApiError.conflict('Transcription has not completed for this task yet');
+  }
+  if (dataset.transcriptSegments.length === 0) {
+    throw ApiError.notFound('No transcript segments available for this task');
+  }
+
+  const srt = generateSrt(dataset.transcriptSegments);
+  res.setHeader('Content-Type', 'application/x-subrip; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="task-${task._id.toString()}.srt"`);
+  res.send(srt);
 });
 
 export const listTaskAnnotations = asyncHandler(async (req: Request, res: Response) => {

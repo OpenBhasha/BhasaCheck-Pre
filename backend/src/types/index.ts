@@ -25,6 +25,8 @@ export type ProcessingStatus =
   | 'completed'
   | 'failed';
 
+export type AudioStorageProvider = 'cloudinary' | 'local';
+
 export interface AccessTokenPayload {
   sub: string;
   role: GlobalRole;

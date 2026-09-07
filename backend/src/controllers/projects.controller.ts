@@ -120,7 +120,7 @@ export const listProjectTasks = asyncHandler(async (req: Request, res: Response)
   if (assignedTo) {
     filter.$or = [{ assignedAnnotator: assignedTo }, { assignedReviewer: assignedTo }];
   }
-  const tasks = await Task.find(filter).sort({ createdAt: -1 });
+  const tasks = await Task.find(filter).sort({ createdAt: -1 }).populate('currentAnnotation');
   res.json({ tasks });
 });
 

@@ -147,16 +147,20 @@ Authorization: Bearer {{adminAccessToken}}
 | `audio` | File | pick a short local audio file (wav/mp3/m4a/flac/ogg) |
 | `language` | Text | `hi` |
 | `speakerLabel` | Text | *(optional)* |
+| `storageProvider` | Text | *(optional)* `cloudinary` or `local` — omit to use the server's default |
 
 Expect `201`:
 ```json
 {
   "task": { "_id": "...", "audioUrl": "https://res.cloudinary.com/...", "status": "unassigned", "dataset": "...", ... },
-  "dataset": { "_id": "...", "processing": { "status": "pending", "progress": 0 }, ... }
+  "dataset": { "_id": "...", "processing": { "status": "pending", "progress": 0 }, "originalAudio": { "provider": "cloudinary", ... }, ... }
 }
 ```
 Save `task._id` → `taskId`, `dataset._id` → `datasetId`. This returns immediately — preprocessing runs in
-the background (see §7 to check/skip waiting on it).
+the background (see §7 to check/skip waiting on it). With `storageProvider: "local"`, `task.audioUrl`
+instead looks like `http://localhost:5000/uploads/projects/<id>/audio/<uuid>.wav` — a real file under
+`backend/storage/audio/` (or wherever `LOCAL_STORAGE_ROOT` points), servable with no auth, same as a
+Cloudinary URL would be.
 
 ### 3.7 Assign the task, and promote Bob to Reviewer
 
@@ -272,6 +276,34 @@ GET {{baseUrl}}/api/projects/{{projectId}}/export?format=csv
 Authorization: Bearer {{adminAccessToken}}
 ```
 Use `?format=json` for a JSON body instead of a CSV file download.
+
+### 3.12 Download the ML transcript as an SRT file
+
+Any project member can pull the machine-generated transcript (not the human RSML annotation) for one
+task as a subtitle file, once preprocessing has completed:
+
+```
+GET {{baseUrl}}/api/tasks/{{taskId}}/export/srt
+Authorization: Bearer {{annotatorAccessToken}}
+```
+
+Expect `200`, `Content-Type: application/x-subrip`, a `.srt` file download. Each cue carries everything
+the pipeline produced for that segment — not just the text:
+```
+1
+00:00:02,300 --> 00:00:08,750
+Speaker: SPEAKER_00 | Overlapping: SPEAKER_01 | Language: hi | Model: whisper | Confidence: 0.91
+नमस्ते आप कैसे हैं
+
+2
+00:00:09,000 --> 00:00:14,200
+Speaker: SPEAKER_01 | Language: hi | Model: whisper
+मैं ठीक हूं
+```
+The metadata line only lists fields that were actually available (e.g. `Confidence` is omitted rather
+than printed as empty when a provider didn't return one) — extra lines per cue are valid SRT, so this
+still opens correctly in any standard player while remaining fully parseable by downstream tooling.
+`409` if `dataset.processing.status` isn't `completed` yet; `404` if there are no transcript segments.
 
 ## 4. Auth token lifecycle
 
@@ -420,11 +452,13 @@ authentication, every route except `/api/auth/*` and `/api/internal/*` also requ
 | DELETE | `/api/projects/:id/members/:userId` | Project Admin/Super Admin | — | `204`, member removed |
 | GET | `/api/projects/:id/tasks` | Project member/Super Admin | query: `status?, assignedTo?` | `200`, filtered task list |
 | GET | `/api/projects/:id/export` | Project Admin/Super Admin | query: `format=csv\|json` | `200`, CSV file download or JSON body of accepted tasks |
-| POST | `/api/tasks?projectId=` | Project Admin/Super Admin | multipart: `audio` (file), `language?`, `speakerLabel?` | `201`, `{task, dataset}` — `dataset.processing.status: "pending"`; job enqueued; `400` if no file attached |
+| POST | `/api/tasks?projectId=` | Project Admin/Super Admin | multipart: `audio` (file), `language?`, `speakerLabel?`, `storageProvider?` (`cloudinary`\|`local`) | `201`, `{task, dataset}` — `dataset.processing.status: "pending"`; job enqueued; `400` if no file attached or an invalid `storageProvider` |
 | GET | `/api/tasks` | Project member/Super Admin | query: `projectId, status?, assignedTo?` | `200`, filtered task list |
 | GET | `/api/tasks/:id` | Project member/Super Admin | — | `200`, `{task, dataset}` |
 | PATCH | `/api/tasks/:id/assign` | Project Admin/Super Admin | `{assignedAnnotator?, assignedReviewer?}` | `200`, updated task; `400` if the user's `projectRole` doesn't fit or reviewer===annotator |
 | GET | `/api/tasks/:id/annotations` | Project member/Super Admin | — | `200`, full annotation + review trail |
+| GET | `/api/tasks/:id/export/srt` | Project member/Super Admin | — | `200`, `.srt` file (speaker/language/model/confidence per cue); `409` if Dataset isn't `completed`; `404` if no transcript segments |
+| DELETE | `/api/tasks/:id` | Project Admin/Super Admin | — | `204`; deletes the task, its Dataset, its Annotations, its stored audio (whichever provider), and any queued processing job |
 | POST | `/api/annotations` | Assigned Annotator/Reviewer | `{taskId, type, parentAnnotation?}` | `201`, draft created (`rsmlText` pre-filled from `task.rsmlTextOriginal` for `type: "annotation"`); `409` if Dataset isn't `completed` yet |
 | GET | `/api/annotations/:id` | Owner/project member/Super Admin | — | `200`, annotation incl. `editHistory` |
 | PATCH | `/api/annotations/:id` | Owner, draft only | `{rsmlText}` | `200`, updated; previous text pushed onto `editHistory`; `409` if not `draft` |

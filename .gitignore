@@ -3,6 +3,13 @@ dist/
 .env
 *.log
 
+# scripts/dev-up.sh runtime state
+.dev-logs/
+.dev-pids/
+
+# Locally-stored audio (the alternative to Cloudinary)
+backend/storage/
+
 # Python
 .venv/
 __pycache__/

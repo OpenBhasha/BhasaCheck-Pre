@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getTask } from '../api/tasks';
+import { downloadTaskSrt, getTask } from '../api/tasks';
 import { listTaskAnnotations } from '../api/tasks';
 import { createAnnotation, reviewAnnotation } from '../api/annotations';
 import { apiErrorMessage } from '../api/client';
+import { downloadBlob } from '../lib/downloadBlob';
 import { useAuth } from '../context/AuthContext';
 import type { Annotation, Dataset, ReviewDecision, Task } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
-import { WaveformPlayer } from '../components/WaveformPlayer';
+import { WaveformPlayer, type WaveformPlayerHandle } from '../components/WaveformPlayer';
 import { TranscriptReference } from '../components/TranscriptReference';
+import { RsmlEditor } from '../components/RsmlEditor';
 
 export function TaskReview() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const waveformRef = useRef<WaveformPlayerHandle>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -58,6 +61,17 @@ export function TaskReview() {
 
   const parentAnnotation = annotations.find((a) => a._id === reviewDraft?.parentAnnotation) ?? null;
 
+  async function handleDownloadSrt() {
+    if (!id) return;
+    setError(null);
+    try {
+      const blob = await downloadTaskSrt(id);
+      downloadBlob(blob, `task-${id}.srt`);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not download SRT'));
+    }
+  }
+
   async function handleDecision(decision: ReviewDecision) {
     if (!reviewDraft) return;
     setDeciding(decision);
@@ -89,10 +103,20 @@ export function TaskReview() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      <WaveformPlayer audioUrl={task.audioUrl} />
+      <WaveformPlayer ref={waveformRef} audioUrl={task.audioUrl} />
 
       {dataset?.processing.status === 'completed' && dataset.transcriptSegments.length > 0 && (
-        <TranscriptReference segments={dataset.transcriptSegments} />
+        <>
+          <TranscriptReference
+            segments={dataset.transcriptSegments}
+            onSeek={(t) => waveformRef.current?.seekTo(t)}
+          />
+          <div className="btn-row" style={{ margin: '-10px 0 16px' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadSrt}>
+              Download SRT
+            </button>
+          </div>
+        </>
       )}
 
       {!parentAnnotation ? (
@@ -104,7 +128,7 @@ export function TaskReview() {
       ) : (
         <div className="card">
           <h3 style={{ marginBottom: 12 }}>Annotator's submission</h3>
-          <textarea value={parentAnnotation.rsmlText} readOnly style={{ minHeight: 180 }} />
+          <RsmlEditor key={parentAnnotation._id} initialValue={parentAnnotation.rsmlText} editable={false} />
 
           {reviewDraft?.status === 'draft' ? (
             <>

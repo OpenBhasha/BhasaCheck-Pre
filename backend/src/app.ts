@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import path from 'path';
 import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiRateLimiter } from './middleware/rateLimit';
@@ -15,7 +16,12 @@ import internalRoutes from './routes/internal.routes';
 export function createApp(): Application {
   const app = express();
 
-  app.use(helmet());
+  // crossOriginResourcePolicy defaults to same-origin, which would block the
+  // frontend (a different origin) from loading locally-stored audio via
+  // fetch/WaveSurfer — set it permissively to match how a Cloudinary URL
+  // already behaves (publicly fetchable cross-origin, gated only by an
+  // unguessable path, not by auth).
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: env.corsOrigin }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
@@ -25,6 +31,10 @@ export function createApp(): Application {
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
   app.get('/ping', (_req, res) => res.type('text/plain').send('pong'));
+
+  // Serves locally-stored audio (the alternative to Cloudinary) at the same
+  // kind of plain, unauthenticated URL a Cloudinary asset would have.
+  app.use('/uploads', express.static(path.resolve(env.localStorageRoot)));
 
   app.use('/api/auth', apiRateLimiter, authRoutes);
   app.use('/api/users', apiRateLimiter, usersRoutes);
